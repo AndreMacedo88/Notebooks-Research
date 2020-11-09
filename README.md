@@ -1,2 +1,2 @@
-# Genomics-Notebooks
-Place to host my notebooks that explore genomics data
+# Research-Notebooks
+Place to host my notebooks that explore biological data
