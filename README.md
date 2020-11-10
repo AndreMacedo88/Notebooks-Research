@@ -1,2 +1,2 @@
 # Research-Notebooks
-Place to host my notebooks that explore biological data
+A place to host my notebooks that explore biological data
