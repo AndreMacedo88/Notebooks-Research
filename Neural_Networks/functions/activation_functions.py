@@ -41,4 +41,22 @@ def step(x, threshold):
 
 
 def logistic(x):
+    """logistic function.
+    This function passes the input through a logistic function (S-shaped function)
+    where the large negative or positive values will tend to produce -1 and 1,
+    respectively, and values close to 0 will produce rapidly changing values between
+    -1 and 1.
+    The logistic activation function is a good choice for multi-class classification
+    problems where the goal is to produce a continuous output.
+
+    Parameters
+    ----------
+    x : _type_
+        _description_
+
+    Returns
+    -------
+    _type_
+        _description_
+    """
     return 1 / (1 + np.exp(-x))
