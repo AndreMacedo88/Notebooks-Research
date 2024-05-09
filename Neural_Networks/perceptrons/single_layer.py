@@ -8,7 +8,22 @@ from functions import activation_functions as act
 
 
 class Perceptron(object):
-    def __init__(self, eta=0.01, epochs=50):
+    """
+    Rosenblatt Perceptron classifier
+
+    This implementation of the Perceptron expects binary class labels
+    in {0, 1}.
+
+    Parameters
+    ------------
+    eta : float (default: 0.1)
+        Learning rate (between 0.0 and 1.0)
+    epochs : int (default: 50)
+        Number of passes over the training dataset.
+        Prior to each epoch, the dataset is shuffled to prevent cycles.
+    """
+
+    def __init__(self, eta=0.1, epochs=50):
         self.eta = eta
         self.epochs = epochs
 
@@ -35,6 +50,21 @@ class Perceptron(object):
 
 
 class Adaline(object):
+    """
+    ADALINE classifier
+
+    This implementation of the Perceptron expects binary class labels
+    in {-1, 1}.
+
+    Parameters
+    ------------
+    eta : float (default: 0.1)
+        Learning rate (between 0.0 and 1.0)
+    epochs : int (default: 50)
+        Number of passes over the training dataset.
+        Prior to each epoch, the dataset is shuffled to prevent cycles.
+    """
+
     def __init__(self, eta=0.01, epochs=50):
         self.eta = eta
         self.epochs = epochs
