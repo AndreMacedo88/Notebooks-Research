@@ -29,21 +29,21 @@ class Perceptron(object):
 
     def fit(self, X, y):
 
-        self.w_ = np.zeros(1 + X.shape[1])
-        self.errors_ = []
+        self.weights = np.zeros(1 + X.shape[1])
+        self.errors = []
 
         for _ in range(self.epochs):
-            errors = 0
-            for xi, target in zip(X, y):
-                update = self.eta * (target - self.predict(xi))
-                self.w_[1:] += update * xi
-                self.w_[0] += update
-                errors += int(update != 0.0)
-            self.errors_.append(errors)
+            _errors = 0
+            for x_i, target in zip(X, y):
+                update = self.eta * (target - self.predict(x_i))
+                self.weights[1:] += update * x_i
+                self.weights[0] += update
+                _errors += int(update != 0.0)
+            self.errors.append(_errors)
         return self
 
     def net_input(self, X):
-        return (np.dot(X, self.w_[1:]) + self.w_[0]).flatten()
+        return (np.dot(X, self.weights[1:]) + self.weights[0]).flatten()
 
     def predict(self, X):
         return act.step(x=self.net_input(X), threshold=0)
@@ -53,7 +53,7 @@ class Adaline(object):
     """
     ADALINE classifier
 
-    This implementation of the Perceptron expects binary class labels
+    This implementation of the Adaline expects binary class labels
     in {-1, 1}.
 
     Parameters
@@ -71,21 +71,23 @@ class Adaline(object):
 
     def fit(self, X, y):
 
-        self.w_ = np.zeros(1 + X.shape[1])
-        self.errors_ = []
+        self.weights = np.zeros(1 + X.shape[1])
+        self.errors = []
 
         for _ in range(self.epochs):
-            errors = 0
-            for xi, target in zip(X, y):
-                update = self.eta * (target - self.predict(xi))
-                self.w_[1:] += update * xi
-                self.w_[0] += update
-                errors += int(update != 0.0)
-            self.errors_.append(errors)
+            _errors = 0
+            for x_i, target in zip(X, y):
+                update = self.eta * (target - self.predict(x_i))
+                self.weights[1:] += update * x_i
+                self.weights[0] += update
+                _errors += int(update != 0.0)
+            self.errors.append(_errors)
         return self
 
     def net_input(self, X):
-        return (np.dot(X, self.w_[1:]) + self.w_[0]).flatten()
+        return (np.dot(X, self.weights[1:]) + self.weights[0]).flatten()
 
     def predict(self, X):
-        return act.logistic(x=self.net_input(X))
+        return act.logistic(
+            x=self.net_input(X)
+        )  # TODO: change this to make a real Adaline
