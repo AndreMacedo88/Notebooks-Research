@@ -37,7 +37,7 @@ def step(x, threshold):
     _type_
         _description_
     """
-    return 1 if x >= threshold else 0
+    return np.where(x >= threshold, 1, 0)
 
 
 def logistic(x):
