@@ -1,7 +1,7 @@
 """
-Compute a OLS solution to a linear regression.
+Compute OLS estimators of the parameters.
 """
-function hand_OLS(x::Vector{<:Real}, y::Vector{<:Real})
+function OLS_estimation(x::Vector{<:Real}, y::Vector{<:Real})
     n = length(x)
     
     x̄ = (1/n) .* sum(x)
