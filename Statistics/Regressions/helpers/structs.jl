@@ -1,6 +1,7 @@
 using Printf
 using DataFrames
 using StatsModels
+using Logging
 
 """
     LinearModelOLS(formula::FormulaTerm, data::DataFrames.DataFrame)
@@ -31,16 +32,50 @@ struct LinearModelOLS
     formula::FormulaTerm
     data::DataFrames.DataFrame
     coefs::Dict
-    
+    residuals::Matrix
+    SSE::Real
+    MSE::Real
+    SE::Dict
+    t::Dict
+    pval::Dict
+    ci::Dict
+
     function LinearModelOLS(formula::FormulaTerm, data::DataFrames.DataFrame)
         y, x = _process_formula(formula, data)
-        b0, b1 = _estimate_params_OLS(y, x)
+        n = length(x)
+        b0, b1 = _estimate_params_OLS(y, x, n)
+
+        e = _errors(b0, b1, y, x)
+        SSE = _SSE(e)
+        MSE = _MSE(SSE, n)
+        residual_se = √(MSE)
+
+        SE0, SE1 = [_SE(residual_se, x, n, type) for type in ["intercept", "predictor"]]
+        t0, t1 = [_t_statistic_parameters(coef, SE) for (coef, SE) in zip([b0, b1], [SE0, SE1])]
+        pval0, pval1 = [_significance_test_parameters(t, n) for t in [t0, t1]]
+        ci0, ci1 = [_confidence_interval(coef, n, SE) for (coef, SE) in zip([b0, b1], [SE0, SE1])]
 
         _, predictor = termnames(formula)
 
-        coefs = Dict{String, Real}("Intercept" => b0, predictor => b1)  # works only for one predictor
+        # the following assignments work only for one predictor
+        coefs = Dict{String,Real}("Intercept" => b0, predictor => b1)
+        SEs = Dict{String,Real}("Intercept" => SE0, predictor => SE1)
+        ts = Dict{String,Real}("Intercept" => t0, predictor => t1)
+        pvals = Dict{String,Real}("Intercept" => pval0, predictor => pval1)
+        cis = Dict{String,Vector}("Intercept" => ci0, predictor => ci1)
 
-        new(formula, data, coefs)
+        new(
+            formula,
+            data,
+            coefs,
+            e,
+            SSE,
+            MSE,
+            SEs,
+            ts,
+            pvals,
+            cis
+        )
 
     end
 
@@ -54,72 +89,125 @@ end
 """
 Estimation of the parameters by OLS
 """
-function _estimate_params_OLS(y, x)
-    n = length(x)
-        
-    x̄ = (1/n) .* sum(x)
-    ȳ = (1/n) .* sum(y)
+function _estimate_params_OLS(y, x, n)
+    x̄ = (1 / n) .* sum(x)
+    ȳ = (1 / n) .* sum(y)
 
-    cov = ((1/n) .* sum(y.*x)) - ((1/(n^2)) .* sum(y) .* sum(x))
-    var_x = ((1/n) .* sum(x.^2)) - (((1/n) .* sum(x))^2)
+    cov = ((1 / n) .* sum(y .* x)) - ((1 / (n^2)) .* sum(y) .* sum(x))
+    var_x = ((1 / n) .* sum(x .^ 2)) - (((1 / n) .* sum(x))^2)
 
     b1 = cov / var_x
     b0 = ȳ - (b1 * x̄)
 
     b0, b1
-
 end
 
-function _significance_test_parameters()
-end
+_errors(intercept, coefs, y, x) = y .- (coefs .* x .+ intercept)
 
-function hand_predict(model, data=nothing)
-    if data === nothing
-        data = model.data
-    end
+_SSE(e) = sum(e_ -> e_^2, e) # anonymous to avoid allocating space to the squared values
 
-    _, predictors = termnames(model.formula)
+_MSE(SSE, n) = SSE / (n - 2)
 
-    intercept = get(model.coefs, "Intercept", nothing)
+function _SE(residual_se, x, n, type)
+    X̄ = sum(x) / n
 
-    coefs = Vector{Float64}()
-    if predictors isa String
-        coef = get(model.coefs, predictors, nothing)
-        push!(coefs, coef)
+    if type == "intercept"
+        return residual_se * √((1 / n) + ((X̄ .^ 2) / sum((x .- X̄) .^ 2)))
+    elseif type == "predictor"
+        return residual_se / √(sum((x .- X̄) .^ 2))
     else
-        for predictor in predictors
-            coef = get(model.coefs, predictor, nothing)
-            push!(coefs, coef)
-        end
+        @warn "The type of variable does not exist. Unable to calculate SE." type
     end
+end
 
-    data_predictors = data[:, predictors]
-    coefs .* data_predictors .+ intercept
+_t_statistic_parameters(coef, SE) = coef / SE
 
+function _significance_test_parameters(t, n)
+    df = n - 2
+    model = TDist(df)
+
+    # return 2-sided p-value
+    (1 - cdf(model, abs(t)) + cdf(model, -abs(t)))
+end
+
+function _confidence_interval(b, n, SE, α=0.05)
+    model = TDist(n - 2)
+    t_ = quantile.(model, [α / 2, 1 - (α / 2)])  # returns a vector with both quantiles
+    correction = t_ * SE
+
+    # return a vector containing the confidence interval
+    b .+ correction
 end
 
 function Base.show(io::IO, model::LinearModelOLS)
     @printf("%s\n\n", "OLS Linear Regression Model")
     @printf("%-10s%s\n\n\n", "Formula:", model.formula)
-    
+
     b0 = get(model.coefs, "Intercept", nothing)
+    SE0 = get(model.SE, "Intercept", nothing)
+    t0 = get(model.t, "Intercept", nothing)
+    pval0 = get(model.pval, "Intercept", nothing)
+    ci0 = get(model.ci, "Intercept", nothing)
+    ci0 = round.(ci0; digits=2)
+
     _, predictors = termnames(model.formula)
 
     @printf("%15s:\n", "Coefficients")
-    @printf("%s\n", "────────────────────────────────────")
-    @printf("%26s\n", "Coef.")
-    @printf("%s\n", "────────────────────────────────────")
-    @printf("%15s:%10.3f\n", "Intercept", b0)
+    @printf("%s\n", "─────────────────────────────────────────────────────────────────────────────")
+    @printf(
+        "%26s%12s%10s%10s%18s\n",
+        "Coef.",
+        "Std.Error",
+        "t",
+        "pval",
+        "95% CI"
+    )
+    @printf("%s\n", "─────────────────────────────────────────────────────────────────────────────")
+    @printf(
+        "%15s:%10.3f%12.2f%10.2f%10.0e%18s\n",
+        "Intercept",
+        b0,
+        SE0,
+        t0,
+        pval0,
+        ci0
+    )
 
     if predictors isa String
-        value = get(model.coefs, predictors, nothing)
-        @printf("%15s:%10.3f\n", predictors, value)
-        
+        coef = get(model.coefs, predictors, nothing)
+        SE = get(model.SE, predictors, nothing)
+        t = get(model.t, predictors, nothing)
+        pval = get(model.pval, predictors, nothing)
+        ci = get(model.ci, predictors, nothing)
+        ci = round.(ci; digits=2)
+        @printf(
+            "%15s:%10.3f%12.2f%10.2f%10.0e%18s\n",
+            predictors,
+            coef,
+            SE,
+            t,
+            pval,
+            ci
+        )
+
     else
         for term in predictors
-            value = round(get(model.coefs, term, nothing), digits=3)
-            @printf("%15s:%10s\n", term, string(value))
+            coef = get(model.coefs, term, nothing)
+            SE = get(model.SE, term, nothing)
+            t = get(model.t, term, nothing)
+            pval = get(model.pval, term, nothing)
+            ci = get(model.ci, term, nothing)
+            ci = round.(ci; digits=2)
+            @printf(
+                "%15s:%10.3f%12.2f%10.2f%10.3e%18s\n",
+                term,
+                coef,
+                SE,
+                t,
+                pval,
+                ci
+            )
         end
     end
-    @printf("%s\n", "────────────────────────────────────")
+    @printf("%s\n", "─────────────────────────────────────────────────────────────────────────────")
 end
