@@ -33,22 +33,30 @@ struct LinearModelOLS
     data::DataFrames.DataFrame
     coefs::Dict
     residuals::Matrix
+    SST::Real
     SSE::Real
+    SSR::Real
     MSE::Real
     SE::Dict
     t::Dict
     pval::Dict
     ci::Dict
+    R²::Real
 
     function LinearModelOLS(formula::FormulaTerm, data::DataFrames.DataFrame)
         y, x = _process_formula(formula, data)
         n = length(x)
+        SST = _SST(y)
+
         b0, b1 = _estimate_params_OLS(y, x, n)
 
         e = _errors(b0, b1, y, x)
         SSE = _SSE(e)
         MSE = _MSE(SSE, n)
         residual_se = √(MSE)
+
+        SSR = SST - SSE
+        R² = SSR / SST
 
         SE0, SE1 = [_SE(residual_se, x, n, type) for type in ["intercept", "predictor"]]
         t0, t1 = [_t_statistic_parameters(coef, SE) for (coef, SE) in zip([b0, b1], [SE0, SE1])]
@@ -69,12 +77,15 @@ struct LinearModelOLS
             data,
             coefs,
             e,
+            SST,
             SSE,
+            SSR,
             MSE,
             SEs,
             ts,
             pvals,
-            cis
+            cis,
+            R²
         )
 
     end
@@ -137,6 +148,11 @@ function _confidence_interval(b, n, SE, α=0.05)
 
     # return a vector containing the confidence interval
     b .+ correction
+end
+
+function _SST(y)
+    ȳ = mean(y)
+    sum((y .- ȳ) .^ 2)
 end
 
 function Base.show(io::IO, model::LinearModelOLS)
