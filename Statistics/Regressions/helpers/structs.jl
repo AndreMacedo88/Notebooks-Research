@@ -4,7 +4,7 @@ using StatsModels
 using Logging
 
 """
-    LinearModelOLS(formula::FormulaTerm, data::DataFrames.DataFrame)
+    LinearModelSimple(formula::FormulaTerm, data::DataFrames.DataFrame)
 
 Compute a simple Linear Regression
 
@@ -28,7 +28,7 @@ as shown by the Gauss Markov theorem.
 Explanation [here](https://www.statlect.com/fundamentals-of-statistics/Gauss-Markov-theorem).
 
 """
-struct LinearModelOLS
+struct LinearModelSimple
     formula::FormulaTerm
     data::DataFrames.DataFrame
     coefs::Dict
@@ -43,12 +43,12 @@ struct LinearModelOLS
     ci::Dict
     R²::Real
 
-    function LinearModelOLS(formula::FormulaTerm, data::DataFrames.DataFrame)
+    function LinearModelSimple(formula::FormulaTerm, data::DataFrames.DataFrame)
         y, x = _process_formula(formula, data)
         n = length(x)
         SST = _SST(y)
 
-        b0, b1 = _estimate_params_OLS(y, x, n)
+        b0, b1 = _estimate_params_OLS_simple(y, x, n)
 
         e = _errors(b0, b1, y, x)
         SSE = _SSE(e)
@@ -92,9 +92,118 @@ struct LinearModelOLS
 
 end
 
+
+"""
+    LinearModelOLS(formula::FormulaTerm, data::DataFrames.DataFrame)
+
+Compute a Multiple Linear Regression
+
+# Method
+- The parameters are estimated via Ordinary Least Squares (OLS)
+
+OLS is an analytical solution that is equivalent to the MLE for a certain type 
+of linear regression:
+- The model is correctly specified:
+    - We have not omitted important variables in the model (underfitting the data)
+    - We do not have redundant variables in the model (overfitting the data)
+    - The necessary transformations of the variables are applied (e.g. to linearize the relation to the response variable in the case of linear regressions)
+    - We do not have outliers in the residuals of the model
+- The residuals are independent and identically distributed
+- The explanatory variables are not correlated with anything but the response variable
+
+The OLS equations are derived from minimizing the Sum of Squared Errors (SSE) (see proof [here](https://openforecast.org/sba/OLS.html))
+
+For the linear regression, the OLS estimator produces the Best Linear Unbiased Estimates (BLUE), 
+as shown by the Gauss Markov theorem. 
+Explanation [here](https://www.statlect.com/fundamentals-of-statistics/Gauss-Markov-theorem).
+
+"""
+struct LinearModelOLS
+    formula::FormulaTerm
+    data::DataFrames.DataFrame
+    coefs::Dict
+    residuals::Matrix
+    SST::Real
+    SSE::Real
+    SSR::Real
+    MSE::Real
+    SE::Dict
+    t::Dict
+    pval::Dict
+    ci::Dict
+    R²::Real
+
+    function LinearModelOLS(formula::FormulaTerm, data::DataFrames.DataFrame)
+        y, x = _process_formula(formula, data)
+        n = length(x)
+        SST = _SST(y)
+
+        b0, b1 = _estimate_params_OLS(y, x, n)
+        @info("Parameter estimation:", b0, b1)
+
+        e = _errors(b0, b1, y, x)
+        SSE = _SSE(e)
+        MSE = _MSE(SSE, n)
+        residual_se = √(MSE)
+
+        SSR = SST - SSE
+        R² = SSR / SST
+
+        SE0, SE1 = [_SE(residual_se, x, n, type) for type in ["intercept", "predictor"]]
+        t0, t1 = [_t_statistic_parameters(coef, SE) for (coef, SE) in zip([b0, b1], [SE0, SE1])]
+        pval0, pval1 = [_significance_test_parameters(t, n) for t in [t0, t1]]
+        ci0, ci1 = [_confidence_interval(coef, n, SE) for (coef, SE) in zip([b0, b1], [SE0, SE1])]
+
+        _, predictor = termnames(formula)
+        @info("predictor: ", predictor)
+
+        # the following assignments work only for one predictor
+        coefs = Dict{String,Real}("Intercept" => b0, predictor => b1)
+        SEs = Dict{String,Real}("Intercept" => SE0, predictor => SE1)
+        ts = Dict{String,Real}("Intercept" => t0, predictor => t1)
+        pvals = Dict{String,Real}("Intercept" => pval0, predictor => pval1)
+        cis = Dict{String,Vector}("Intercept" => ci0, predictor => ci1)
+
+        new(
+            formula,
+            data,
+            coefs,
+            e,
+            SST,
+            SSE,
+            SSR,
+            MSE,
+            SEs,
+            ts,
+            pvals,
+            cis,
+            R²
+        )
+
+    end
+
+end
+
 function _process_formula(formula, data)
     schema_data = apply_schema(formula, schema(formula, data))
     modelcols(schema_data, data)
+end
+
+
+"""
+Estimation of the parameters by OLS
+"""
+function _estimate_params_OLS_simple(y, x, n)
+    x̄ = (1 / n) .* sum(x)
+    ȳ = (1 / n) .* sum(y)
+
+    cov = ((1 / n) .* sum(y .* x)) - ((1 / (n^2)) .* sum(y) .* sum(x))
+    var_x = ((1 / n) .* sum(x .^ 2)) - (((1 / n) .* sum(x))^2)
+
+    b1 = cov / var_x
+    b0 = ȳ - (b1 * x̄)
+
+    b0, b1
 end
 
 """
@@ -227,3 +336,4 @@ function Base.show(io::IO, model::LinearModelOLS)
     end
     @printf("%s\n", "─────────────────────────────────────────────────────────────────────────────")
 end
+
