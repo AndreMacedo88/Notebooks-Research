@@ -149,6 +149,8 @@ struct LinearModelOLS
         SSR = SST - SSE
         R² = SSR / SST
 
+        @info("Metrics:", e, SSE, MSE, residual_se, SSR, R²)
+
         SE0, SE1 = [_SE(residual_se, x, n, type) for type in ["intercept", "predictor"]]
         t0, t1 = [_t_statistic_parameters(coef, SE) for (coef, SE) in zip([b0, b1], [SE0, SE1])]
         pval0, pval1 = [_significance_test_parameters(t, n) for t in [t0, t1]]
