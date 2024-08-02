@@ -50,7 +50,7 @@ struct LinearModelSimple
 
         b0, b1 = _estimate_params_OLS_simple(y, x, n)
 
-        e = _errors(b0, b1, y, x)
+        e = _errors_simple(b0, b1, y, x)
         SSE = _SSE(e)
         MSE = _MSE(SSE, n)
         residual_se = √(MSE)
@@ -134,14 +134,15 @@ struct LinearModelOLS
     R²::Real
 
     function LinearModelOLS(formula::FormulaTerm, data::DataFrames.DataFrame)
-        y, x = _process_formula(formula, data)
-        n = length(x)
+        y, X = _process_formula(formula, data)
+        @info("X:", size(X))
+        n = size(X)[1]
         SST = _SST(y)
 
-        b0, b1 = _estimate_params_OLS(y, x, n)
-        @info("Parameter estimation:", b0, b1)
+        b = _estimate_params_OLS(y, X)
+        @info("Parameter estimation:", b)
 
-        e = _errors(b0, b1, y, x)
+        e = _errors(b, y, X)
         SSE = _SSE(e)
         MSE = _MSE(SSE, n)
         residual_se = √(MSE)
@@ -151,7 +152,7 @@ struct LinearModelOLS
 
         @info("Metrics:", e, SSE, MSE, residual_se, SSR, R²)
 
-        SE0, SE1 = [_SE(residual_se, x, n, type) for type in ["intercept", "predictor"]]
+        SE0, SE1 = [_SE(residual_se, X, n, type) for type in ["intercept", "predictor"]]
         t0, t1 = [_t_statistic_parameters(coef, SE) for (coef, SE) in zip([b0, b1], [SE0, SE1])]
         pval0, pval1 = [_significance_test_parameters(t, n) for t in [t0, t1]]
         ci0, ci1 = [_confidence_interval(coef, n, SE) for (coef, SE) in zip([b0, b1], [SE0, SE1])]
@@ -211,20 +212,14 @@ end
 """
 Estimation of the parameters by OLS
 """
-function _estimate_params_OLS(y, x, n)
-    x̄ = (1 / n) .* sum(x)
-    ȳ = (1 / n) .* sum(y)
-
-    cov = ((1 / n) .* sum(y .* x)) - ((1 / (n^2)) .* sum(y) .* sum(x))
-    var_x = ((1 / n) .* sum(x .^ 2)) - (((1 / n) .* sum(x))^2)
-
-    b1 = cov / var_x
-    b0 = ȳ - (b1 * x̄)
-
-    b0, b1
+function _estimate_params_OLS(y, X)
+    β = inv(transpose(X) * X) * (transpose(X) * y)
+    β
 end
 
-_errors(intercept, coefs, y, x) = y .- (coefs .* x .+ intercept)
+_errors_simple(intercept, coefs, y, x) = y .- (coefs .* x .+ intercept)
+
+_errors(coefs, y, x) = y .- (coefs[2:end] .* x .+ coefs[1])
 
 _SSE(e) = sum(e_ -> e_^2, e) # anonymous to avoid allocating space to the squared values
 
