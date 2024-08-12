@@ -137,6 +137,7 @@ struct LinearModelOLS
         y, X = _process_formula(formula, data)
         @info("X:", size(X))
         n = size(X)[1]
+        df = n - size(X)[2]
         SST = _SST(y)
 
         b = _estimate_params_OLS(y, X)
@@ -144,15 +145,15 @@ struct LinearModelOLS
 
         e = _errors(b, y, X)
         SSE = _SSE(e)
-        MSE = _MSE(SSE, n)
-        residual_se = √(MSE)
+        MSE = _MSE(SSE, df)
+        RMSE = √(MSE)  # or standard error
 
         SSR = SST - SSE
-        R² = SSR / SST
+        R² = _R_adjusted(SSE, SST, n, df)
 
-        @info("Metrics:", e, SSE, MSE, residual_se, SSR, R²)
+        @info("Metrics:", e, SSE, MSE, RMSE, SSR, R²)
 
-        SE0, SE1 = [_SE(residual_se, X, n, type) for type in ["intercept", "predictor"]]
+        SE0, SE1 = [_SE(RMSE, X, n, type) for type in ["intercept", "predictor"]]
         t0, t1 = [_t_statistic_parameters(coef, SE) for (coef, SE) in zip(b, [SE0, SE1])]
         pval0, pval1 = [_significance_test_parameters(t, n) for t in [t0, t1]]
         ci0, ci1 = [_confidence_interval(coef, n, SE) for (coef, SE) in zip(b, [SE0, SE1])]
@@ -219,11 +220,15 @@ end
 
 _errors_simple(intercept, coefs, y, x) = y .- (coefs .* x .+ intercept)
 
-_errors(coefs, y, x) = y .- (coefs[2:end] .* x .+ coefs[1])
+# _errors(coefs, y, x) = y .- (coefs[2:end] .* x .+ coefs[1])
+
+_errors(coefs, y, X) = y .- (coefs' * X')
 
 _SSE(e) = sum(e_ -> e_^2, e) # anonymous to avoid allocating space to the squared values
 
-_MSE(SSE, n) = SSE / (n - 2)
+function _MSE(SSE, df)
+    SSE / df
+end
 
 function _SE(residual_se, x, n, type)
     X̄ = sum(x) / n
@@ -259,6 +264,10 @@ end
 function _SST(y)
     ȳ = mean(y)
     sum((y .- ȳ) .^ 2)
+end
+
+function _R_adjusted(SSE, SST, n, df)
+    1 - (((n - 1) * SSE) / (df * SST))
 end
 
 function Base.show(io::IO, model::LinearModelOLS)
