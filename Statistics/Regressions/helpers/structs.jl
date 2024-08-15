@@ -157,6 +157,7 @@ struct LinearModelOLS
         t0, t1 = [_t_statistic_parameters(coef, SE) for (coef, SE) in zip(b, [SE0, SE1])]
         pval0, pval1 = [_significance_test_parameters(t, n) for t in [t0, t1]]
         ci0, ci1 = [_confidence_interval(coef, n, SE) for (coef, SE) in zip(b, [SE0, SE1])]
+        @info("More metrics:", SE0, SE1, t0, t1, pval0, pval1, ci0, ci1)
 
         _, predictor = termnames(formula)
         @info("predictor: ", predictor)
