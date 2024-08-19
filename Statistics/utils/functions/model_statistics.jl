@@ -1,10 +1,12 @@
 using LinearAlgebra
 
-calculate_residuals(coefs, y, X) = y .- (coefs' * X')
+calculate_residuals(coefs, y, X) = y .- (X * coefs)
 
 calculate_residuals_simple(intercept, coefs, y, x) = y .- (coefs .* x .+ intercept)
 
 calculate_SSE(e) = sum(e_ -> e_^2, e) # anonymous to avoid allocating space to the squared values
+
+# calculate_SSE(e) = sum(e .^ 2)
 
 calculate_MSE(SSE, df) = SSE / df
 
