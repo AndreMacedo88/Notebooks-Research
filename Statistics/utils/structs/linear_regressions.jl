@@ -129,7 +129,7 @@ struct LinearModelOLS
     formula::FormulaTerm
     data::DataFrames.DataFrame
     coefs::Dict
-    residuals::Matrix
+    residuals::Vector{Float64}
     SST::Real
     SSE::Real
     SSR::Real
@@ -142,42 +142,40 @@ struct LinearModelOLS
 
     function LinearModelOLS(formula::FormulaTerm, data::DataFrames.DataFrame)
         y, X = _process_formula(formula, data)
-        @info("X:", size(X))
+        # @info("X:", size(X))
         n = size(X)[1]
         df = n - size(X)[2]
         SST = calculate_SST(y)
-        @info("df:", df)
+        # @info("df:", df)
 
         coefs = solve_normal_equation(y, X)
-        @info("Parameter estimation:", coefs)
+        # @info("Parameter estimation:", coefs)
 
         e = calculate_residuals(coefs, y, X)
         SSE = calculate_SSE(e)
         MSE = calculate_MSE(SSE, df)
-        RMSE = √(MSE)  # or standard error
+        # RMSE = √(MSE)  # or standard error
 
         SSR = SST - SSE
         R² = calculate_R_adjusted(SSE, SST, n, df)
+        # @info("Metrics:", e, SSE, MSE, RMSE, SSR, R²)
 
-        @info("Metrics:", e, SSE, MSE, RMSE, SSR, R²)
         SEs = calculate_SE_smallsamples(MSE, X, df)
-        @info("", SEs)
         ts = calculate_t_statistic(coefs, SEs)
-        @info("", ts)
         pvals = perform_ttest(ts, df)
-        @info("", pvals)
-        cis = calculate_confidence_interval(coef, df, SEs)
-        @info("More metrics:", SEs, ts, pvals, cis)
+        cis = calculate_confidence_interval(coefs, df, SEs)
+        # @info("More metrics:", SEs, ts, pvals, cis)
 
-        _, predictor = termnames(formula)
-        @info("predictor: ", predictor)
+        _, predictors = termnames(formula)
+        predictors[1] = "Intercept"
+        # @info("predictors: ", predictors)
 
-        # the following assignments work only for one predictor
-        # coefs = Dict{String,Real}("Intercept" => b0, predictor => b1)
-        # SEs = Dict{String,Real}("Intercept" => SE0, predictor => SE1)
-        # ts = Dict{String,Real}("Intercept" => t0, predictor => t1)
-        # pvals = Dict{String,Real}("Intercept" => pval0, predictor => pval1)
-        # cis = Dict{String,Vector}("Intercept" => ci0, predictor => ci1)
+        coefs = Dict{String,Real}(label => value for (label, value) in zip(predictors, coefs))
+        SEs = Dict{String,Real}(label => value for (label, value) in zip(predictors, SEs))
+        ts = Dict{String,Real}(label => value for (label, value) in zip(predictors, ts))
+        pvals = Dict{String,Real}(label => value for (label, value) in zip(predictors, pvals))
+        cis = Dict{String,SubArray}(label => value for (label, value) in zip(predictors, eachrow(cis)))
+
 
         new(
             formula,
@@ -218,6 +216,7 @@ function Base.show(io::IO, model::LinearModelOLS)
     ci0 = round.(ci0; digits=2)
 
     _, predictors = termnames(model.formula)
+    predictors[1] = "Intercept"
 
     @printf("%15s:\n", "Coefficients")
     @printf("%s\n", "─────────────────────────────────────────────────────────────────────────────")
@@ -230,15 +229,6 @@ function Base.show(io::IO, model::LinearModelOLS)
         "95% CI"
     )
     @printf("%s\n", "─────────────────────────────────────────────────────────────────────────────")
-    @printf(
-        "%15s:%10.3f%12.2f%10.2f%10.0e%18s\n",
-        "Intercept",
-        b0,
-        SE0,
-        t0,
-        pval0,
-        ci0
-    )
 
     if predictors isa String
         coef = get(model.coefs, predictors, nothing)

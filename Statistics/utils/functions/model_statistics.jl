@@ -44,7 +44,7 @@ end
 function calculate_confidence_interval(b, df, SE, α=0.05)
     model = TDist(df)
     t_ = quantile.(model, [α / 2, 1 - (α / 2)])  # returns a vector with both quantiles
-    correction = t_ * SE
+    correction = SE .* t_'
 
     # return a vector containing the confidence interval
     b .+ correction
