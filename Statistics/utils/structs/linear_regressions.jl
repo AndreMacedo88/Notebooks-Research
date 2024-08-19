@@ -3,6 +3,10 @@ using DataFrames
 using StatsModels
 using Logging
 
+include("../functions/optimization_and_solvers.jl")
+include("../functions/model_utils.jl")
+
+
 """
     LinearModelSimple(formula::FormulaTerm, data::DataFrames.DataFrame)
 
@@ -140,7 +144,7 @@ struct LinearModelOLS
         df = n - size(X)[2]
         SST = _SST(y)
 
-        b = _estimate_params_OLS(y, X)
+        b = solver_normal_equation(y, X)
         @info("Parameter estimation:", b)
 
         e = _errors(b, y, X)
@@ -209,14 +213,6 @@ function _estimate_params_OLS_simple(y, x, n)
     b0 = ȳ - (b1 * x̄)
 
     b0, b1
-end
-
-"""
-Estimation of the parameters by OLS
-"""
-function _estimate_params_OLS(y, X)
-    β = inv(transpose(X) * X) * (transpose(X) * y)
-    β
 end
 
 _errors_simple(intercept, coefs, y, x) = y .- (coefs .* x .+ intercept)
