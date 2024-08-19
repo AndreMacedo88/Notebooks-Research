@@ -4,7 +4,7 @@ using StatsModels
 using Logging
 
 include("../functions/optimization_and_solvers.jl")
-include("../functions/model_utils.jl")
+include("../functions/model_statistics.jl")
 
 
 """
@@ -50,22 +50,24 @@ struct LinearModelSimple
     function LinearModelSimple(formula::FormulaTerm, data::DataFrames.DataFrame)
         y, x = _process_formula(formula, data)
         n = length(x)
-        SST = _SST(y)
+        df = n - size(X)[2]  # in this model it will always be n-2
 
-        b0, b1 = _estimate_params_OLS_simple(y, x, n)
+        SST = SST(y)
 
-        e = _errors_simple(b0, b1, y, x)
-        SSE = _SSE(e)
-        MSE = _MSE(SSE, n)
+        b0, b1 = solver_normal_equation_simple(y, x, n)
+
+        e = residuals_simple(b0, b1, y, x)
+        SSE = SSE(e)
+        MSE = MSE(SSE, n)
         residual_se = √(MSE)
 
         SSR = SST - SSE
         R² = SSR / SST
 
-        SE0, SE1 = [_SE(residual_se, x, n, type) for type in ["intercept", "predictor"]]
-        t0, t1 = [_t_statistic_parameters(coef, SE) for (coef, SE) in zip([b0, b1], [SE0, SE1])]
-        pval0, pval1 = [_significance_test_parameters(t, n) for t in [t0, t1]]
-        ci0, ci1 = [_confidence_interval(coef, n, SE) for (coef, SE) in zip([b0, b1], [SE0, SE1])]
+        SE0, SE1 = [SE_simple(residual_se, x, n, type) for type in ["intercept", "predictor"]]
+        t0, t1 = [t_statistic_parameters(coef, SE) for (coef, SE) in zip([b0, b1], [SE0, SE1])]
+        pval0, pval1 = [ttest(t, df) for t in [t0, t1]]
+        ci0, ci1 = [confidence_interval(coef, n, SE) for (coef, SE) in zip([b0, b1], [SE0, SE1])]
 
         _, predictor = termnames(formula)
 
@@ -142,25 +144,25 @@ struct LinearModelOLS
         @info("X:", size(X))
         n = size(X)[1]
         df = n - size(X)[2]
-        SST = _SST(y)
+        SST = SST(y)
 
         b = solver_normal_equation(y, X)
         @info("Parameter estimation:", b)
 
-        e = _errors(b, y, X)
-        SSE = _SSE(e)
-        MSE = _MSE(SSE, df)
+        e = residuals(b, y, X)
+        SSE = SSE(e)
+        MSE = MSE(SSE, df)
         RMSE = √(MSE)  # or standard error
 
         SSR = SST - SSE
-        R² = _R_adjusted(SSE, SST, n, df)
+        R² = R_adjusted(SSE, SST, n, df)
 
         @info("Metrics:", e, SSE, MSE, RMSE, SSR, R²)
 
-        SE0, SE1 = [_SE(RMSE, X, n, type) for type in ["intercept", "predictor"]]
-        t0, t1 = [_t_statistic_parameters(coef, SE) for (coef, SE) in zip(b, [SE0, SE1])]
-        pval0, pval1 = [_significance_test_parameters(t, n) for t in [t0, t1]]
-        ci0, ci1 = [_confidence_interval(coef, n, SE) for (coef, SE) in zip(b, [SE0, SE1])]
+        SE0, SE1 = [SE_simple(RMSE, X, n, type) for type in ["intercept", "predictor"]]
+        t0, t1 = [t_statistic_parameters(coef, SE) for (coef, SE) in zip(b, [SE0, SE1])]
+        pval0, pval1 = [ttest(t, n) for t in [t0, t1]]
+        ci0, ci1 = [confidence_interval(coef, n, SE) for (coef, SE) in zip(b, [SE0, SE1])]
         @info("More metrics:", SE0, SE1, t0, t1, pval0, pval1, ci0, ci1)
 
         _, predictor = termnames(formula)
@@ -193,79 +195,12 @@ struct LinearModelOLS
 
 end
 
+
 function _process_formula(formula, data)
     schema_data = apply_schema(formula, schema(formula, data))
     modelcols(schema_data, data)
 end
 
-
-"""
-Estimation of the parameters by OLS
-"""
-function _estimate_params_OLS_simple(y, x, n)
-    x̄ = (1 / n) .* sum(x)
-    ȳ = (1 / n) .* sum(y)
-
-    cov = ((1 / n) .* sum(y .* x)) - ((1 / (n^2)) .* sum(y) .* sum(x))
-    var_x = ((1 / n) .* sum(x .^ 2)) - (((1 / n) .* sum(x))^2)
-
-    b1 = cov / var_x
-    b0 = ȳ - (b1 * x̄)
-
-    b0, b1
-end
-
-_errors_simple(intercept, coefs, y, x) = y .- (coefs .* x .+ intercept)
-
-# _errors(coefs, y, x) = y .- (coefs[2:end] .* x .+ coefs[1])
-
-_errors(coefs, y, X) = y .- (coefs' * X')
-
-_SSE(e) = sum(e_ -> e_^2, e) # anonymous to avoid allocating space to the squared values
-
-function _MSE(SSE, df)
-    SSE / df
-end
-
-function _SE(residual_se, x, n, type)
-    X̄ = sum(x) / n
-
-    if type == "intercept"
-        return residual_se * √((1 / n) + ((X̄ .^ 2) / sum((x .- X̄) .^ 2)))
-    elseif type == "predictor"
-        return residual_se / √(sum((x .- X̄) .^ 2))
-    else
-        @warn "The type of variable does not exist. Unable to calculate SE." type
-    end
-end
-
-_t_statistic_parameters(coef, SE) = coef / SE
-
-function _significance_test_parameters(t, n)
-    df = n - 2
-    model = TDist(df)
-
-    # return 2-sided p-value
-    (1 - cdf(model, abs(t)) + cdf(model, -abs(t)))
-end
-
-function _confidence_interval(b, n, SE, α=0.05)
-    model = TDist(n - 2)
-    t_ = quantile.(model, [α / 2, 1 - (α / 2)])  # returns a vector with both quantiles
-    correction = t_ * SE
-
-    # return a vector containing the confidence interval
-    b .+ correction
-end
-
-function _SST(y)
-    ȳ = mean(y)
-    sum((y .- ȳ) .^ 2)
-end
-
-function _R_adjusted(SSE, SST, n, df)
-    1 - (((n - 1) * SSE) / (df * SST))
-end
 
 function Base.show(io::IO, model::LinearModelOLS)
     @printf("%s\n\n", "OLS Linear Regression Model")
