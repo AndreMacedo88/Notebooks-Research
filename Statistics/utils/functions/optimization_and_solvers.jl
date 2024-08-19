@@ -5,13 +5,13 @@ This is less efficient than other approaches, such as SVD, but it's the most com
 approach in tutorials to calculate the coefficients of a linear regression (maybe after 
 gradient descent)
 """
-solver_normal_equation(y, X) = inv(transpose(X) * X) * (transpose(X) * y)
+solve_normal_equation(y, X) = inv(transpose(X) * X) * (transpose(X) * y)
 
 """
 Estimation of the parameters by OLS by forming the normal equation. Version for just one
 coefficient.
 """
-function solver_normal_equation_simple(y, x, n)
+function solve_normal_equation_simple(y, x, n)
     x̄ = (1 / n) .* sum(x)
     ȳ = (1 / n) .* sum(y)
 
@@ -24,11 +24,11 @@ function solver_normal_equation_simple(y, x, n)
     b0, b1
 end
 
-function solver_SVD()
+function solve_SVD()
 end
 
-function solver_QR()
+function solve_QR()
 end
 
-function gradient_descent()
+function solve_gradient_descent()
 end

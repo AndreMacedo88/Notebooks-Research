@@ -2,9 +2,10 @@ using Printf
 using DataFrames
 using StatsModels
 using Logging
+using Revise
 
-include("../functions/optimization_and_solvers.jl")
-include("../functions/model_statistics.jl")
+includet("../functions/optimization_and_solvers.jl")
+includet("../functions/model_statistics.jl")
 
 
 """
@@ -52,22 +53,22 @@ struct LinearModelSimple
         n = length(x)
         df = n - size(X)[2]  # in this model it will always be n-2
 
-        SST = SST(y)
+        SST = calculate_SST(y)
 
-        b0, b1 = solver_normal_equation_simple(y, x, n)
+        b0, b1 = solve_normal_equation_simple(y, x, n)
 
-        e = residuals_simple(b0, b1, y, x)
-        SSE = SSE(e)
-        MSE = MSE(SSE, n)
+        e = calculate_residuals_simple(b0, b1, y, x)
+        SSE = calculate_SSE(e)
+        MSE = calculate_MSE(SSE, n)
         residual_se = √(MSE)
 
         SSR = SST - SSE
         R² = SSR / SST
 
-        SE0, SE1 = [SE_simple(residual_se, x, n, type) for type in ["intercept", "predictor"]]
-        t0, t1 = [t_statistic_parameters(coef, SE) for (coef, SE) in zip([b0, b1], [SE0, SE1])]
-        pval0, pval1 = [ttest(t, df) for t in [t0, t1]]
-        ci0, ci1 = [confidence_interval(coef, n, SE) for (coef, SE) in zip([b0, b1], [SE0, SE1])]
+        SE0, SE1 = [calculate_SE_simple(residual_se, x, n, type) for type in ["intercept", "predictor"]]
+        t0, t1 = [calculate_t_statistic(coef, SE) for (coef, SE) in zip([b0, b1], [SE0, SE1])]
+        pval0, pval1 = [perform_ttest(t, df) for t in [t0, t1]]
+        ci0, ci1 = [calculate_confidence_interval(coef, n, SE) for (coef, SE) in zip([b0, b1], [SE0, SE1])]
 
         _, predictor = termnames(formula)
 
@@ -144,36 +145,39 @@ struct LinearModelOLS
         @info("X:", size(X))
         n = size(X)[1]
         df = n - size(X)[2]
-        SST = SST(y)
+        SST = calculate_SST(y)
+        @info("df:", df)
 
-        b = solver_normal_equation(y, X)
-        @info("Parameter estimation:", b)
+        coefs = solve_normal_equation(y, X)
+        @info("Parameter estimation:", coefs)
 
-        e = residuals(b, y, X)
-        SSE = SSE(e)
-        MSE = MSE(SSE, df)
+        e = calculate_residuals(coefs, y, X)
+        SSE = calculate_SSE(e)
+        MSE = calculate_MSE(SSE, df)
         RMSE = √(MSE)  # or standard error
 
         SSR = SST - SSE
-        R² = R_adjusted(SSE, SST, n, df)
+        R² = calculate_R_adjusted(SSE, SST, n, df)
 
         @info("Metrics:", e, SSE, MSE, RMSE, SSR, R²)
-
-        SE0, SE1 = [SE_simple(RMSE, X, n, type) for type in ["intercept", "predictor"]]
-        t0, t1 = [t_statistic_parameters(coef, SE) for (coef, SE) in zip(b, [SE0, SE1])]
-        pval0, pval1 = [ttest(t, n) for t in [t0, t1]]
-        ci0, ci1 = [confidence_interval(coef, n, SE) for (coef, SE) in zip(b, [SE0, SE1])]
-        @info("More metrics:", SE0, SE1, t0, t1, pval0, pval1, ci0, ci1)
+        SEs = calculate_SE_smallsamples(MSE, X, df)
+        @info("", SEs)
+        ts = calculate_t_statistic(coefs, SEs)
+        @info("", ts)
+        pvals = perform_ttest(ts, df)
+        @info("", pvals)
+        cis = calculate_confidence_interval(coef, df, SEs)
+        @info("More metrics:", SEs, ts, pvals, cis)
 
         _, predictor = termnames(formula)
         @info("predictor: ", predictor)
 
         # the following assignments work only for one predictor
-        coefs = Dict{String,Real}("Intercept" => b0, predictor => b1)
-        SEs = Dict{String,Real}("Intercept" => SE0, predictor => SE1)
-        ts = Dict{String,Real}("Intercept" => t0, predictor => t1)
-        pvals = Dict{String,Real}("Intercept" => pval0, predictor => pval1)
-        cis = Dict{String,Vector}("Intercept" => ci0, predictor => ci1)
+        # coefs = Dict{String,Real}("Intercept" => b0, predictor => b1)
+        # SEs = Dict{String,Real}("Intercept" => SE0, predictor => SE1)
+        # ts = Dict{String,Real}("Intercept" => t0, predictor => t1)
+        # pvals = Dict{String,Real}("Intercept" => pval0, predictor => pval1)
+        # cis = Dict{String,Vector}("Intercept" => ci0, predictor => ci1)
 
         new(
             formula,
