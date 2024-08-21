@@ -50,13 +50,16 @@ struct LinearModelSimple
 
     function LinearModelSimple(formula::FormulaTerm, data::DataFrames.DataFrame)
         y, x = _process_formula(formula, data)
-        n = length(x)
-        df = n - size(X)[2]  # in this model it will always be n-2
 
+        # Calculate regression-independent statistics
+        n = length(x)
+        df = n - size(X)[2]  # n-k, where k includes the intercept
         SST = calculate_SST(y)
 
+        # Calculate coefficients
         b0, b1 = solve_normal_equation_simple(y, x, n)
 
+        # Calculate regression statistics
         e = calculate_residuals_simple(b0, b1, y, x)
         SSE = calculate_SSE(e)
         MSE = calculate_MSE(SSE, n)
@@ -127,7 +130,7 @@ Explanation [here](https://www.statlect.com/fundamentals-of-statistics/Gauss-Mar
 """
 struct LinearModelOLS
     formula::FormulaTerm
-    data::DataFrames.DataFrame
+    X::Matrix{Float64}
     coefs::Dict
     residuals::Vector{Float64}
     SST::Real
@@ -142,33 +145,30 @@ struct LinearModelOLS
 
     function LinearModelOLS(formula::FormulaTerm, data::DataFrames.DataFrame)
         y, X = _process_formula(formula, data)
-        # @info("X:", size(X))
+
+        # Calculate regression-independent statistics
         n = size(X)[1]
         df = n - size(X)[2]
         SST = calculate_SST(y)
-        # @info("df:", df)
 
+        # Calculate coefficients
         coefs = solve_normal_equation(y, X)
-        # @info("Parameter estimation:", coefs)
 
+        # Calculate regression statistics
         e = calculate_residuals(coefs, y, X)
         SSE = calculate_SSE(e)
         MSE = calculate_MSE(SSE, df)
         # RMSE = √(MSE)  # or standard error
-
         SSR = SST - SSE
         R² = calculate_R_adjusted(SSE, SST, n, df)
-        # @info("Metrics:", e, SSE, MSE, RMSE, SSR, R²)
 
         SEs = calculate_SE_smallsamples(MSE, X, df)
         ts = calculate_t_statistic(coefs, SEs)
         pvals = perform_ttest(ts, df)
         cis = calculate_confidence_interval(coefs, df, SEs)
-        # @info("More metrics:", SEs, ts, pvals, cis)
 
         _, predictors = termnames(formula)
         predictors[1] = "Intercept"
-        # @info("predictors: ", predictors)
 
         coefs = Dict{String,Real}(label => value for (label, value) in zip(predictors, coefs))
         SEs = Dict{String,Real}(label => value for (label, value) in zip(predictors, SEs))
@@ -179,7 +179,7 @@ struct LinearModelOLS
 
         new(
             formula,
-            data,
+            X,
             coefs,
             e,
             SST,
