@@ -30,13 +30,12 @@ function hand_predict(model, data=nothing)
 
     _, predictors = termnames(model.formula)
 
-
     coefs = Vector{Float64}()
     if predictors isa String
         intercept = get(model.coefs, "Intercept", nothing)
         coef = get(model.coefs, predictors, nothing)
         push!(coefs, coef)
-        # data_predictors = data[:, predictors]
+
         return coefs .* data .+ intercept
     else
         predictors[1] = "Intercept"
@@ -44,6 +43,7 @@ function hand_predict(model, data=nothing)
             coef = get(model.coefs, predictor, nothing)
             push!(coefs, coef)
         end
+
         return data * coefs
     end
 
