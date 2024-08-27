@@ -1,3 +1,5 @@
+using LinearAlgebra
+
 """
 Estimation of the parameters by OLS by forming the normal equation and solving
 the inverse of XᵗX.
@@ -24,11 +26,25 @@ function solve_normal_equation_simple(y, x, n)
     b0, b1
 end
 
-function solve_SVD()
+"""
+Solves Moore-Penrose pseudoinverse? pinv(A) * b (here: pinv(X) * y)
+"""
+function solve_SVD(y, X)
+    F = svd(X)
+    pinv(F.S)
 end
 
-function solve_QR()
+r"""
+Similar to using the function ´qr´ and solving it (´qr(X, Val(true)) \ y´)
+The basic ´qr() \ y´ a solves the linear system ´Xb = Qᵗy´ but assumes that X has full rank. 
+In the algorithm for the pivoted QR, there is an explicit check on the rank of X 
+and then it computes a least square solution for the system.
+"""
+function solve_QR(y, X)
+    qr(X, Val(true)) \ y
 end
 
+"""
+"""
 function solve_gradient_descent()
 end
