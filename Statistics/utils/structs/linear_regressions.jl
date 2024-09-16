@@ -143,7 +143,7 @@ struct LinearModelOLS
     ci::Dict
     R²::Real
 
-    function LinearModelOLS(formula::FormulaTerm, data::DataFrames.DataFrame)
+    function LinearModelOLS(formula::FormulaTerm, data::DataFrames.DataFrame, method::String)
         y, X = _process_formula(formula, data)
 
         # Calculate regression-independent statistics
@@ -152,7 +152,7 @@ struct LinearModelOLS
         SST = calculate_SST(y)
 
         # Calculate coefficients
-        coefs = solve_normal_equation(y, X)
+        coefs = _calculate_coefficients(y, X, method)
 
         # Calculate regression statistics
         e = calculate_residuals(coefs, y, X)
@@ -203,6 +203,17 @@ function _process_formula(formula, data)
     modelcols(schema_data, data)
 end
 
+function _calculate_coefficients(y, X, method)
+    if method == "normal"
+        return solve_normal_equation(y, X)
+    elseif method == "SVD"
+        return solve_SVD(y, X)
+    elseif method == "QR"
+        return solve_QR(y, X)
+    else
+        throw("Method $method not yet implemented")
+    end
+end
 
 function Base.show(io::IO, model::LinearModelOLS)
     @printf("%s\n\n", "OLS Linear Regression Model")
